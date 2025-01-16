@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.*?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<BorderPane xmlns="http://javafx.com/javafx"
+            xmlns:fx="http://javafx.com/fxml"
+            stylesheets="@style.css"
+            fx:controller="org.example.LoginController"
+            prefHeight="600.0" prefWidth="400.0"
+    styleClass="root-pane">
+
+    <center>
+        <VBox spacing="20.0" alignment="CENTER" prefWidth="350.0">
+            <Label text="Welcome Back!" styleClass="header-label"/>
+            <TextField fx:id="usernameField" promptText="Username" styleClass="input-field"/>
+            <PasswordField fx:id="passwordField" promptText="Password" styleClass="input-field"/>
+            <Button fx:id="loginButton" text="Login" styleClass="primary-button login-button"/>
+            <HBox spacing="5.0" alignment="CENTER">
+                <Label text="Don't have an account?" styleClass="secondary-label"/>
+                <Hyperlink fx:id="signupLink" text="Sign up"/>
+            </HBox>
+        </VBox>
+    </center>
+</BorderPane>

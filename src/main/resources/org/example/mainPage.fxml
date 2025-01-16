@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.canvas.Canvas?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.ComboBox?>
+<?import javafx.scene.control.Slider?>
+<?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.HBox?>
+
+<BorderPane xmlns="http://javafx.com/javafx" xmlns:fx="http://javafx.com/fxml"
+            fx:controller="org.example.MainPageController"
+            stylesheets="@style.css"
+            styleClass="canvas-pane">
+
+    <top>
+        <HBox spacing="10" alignment="CENTER" styleClass="header-pane">
+            <Button fx:id="clearButton" text="Clear Canvas" styleClass="primary-button clear-button"/>
+            <Slider fx:id="thicknessSlider" min="1" max="10" value="1"/>
+            <ComboBox fx:id="colorPicker" promptText="Select Color"/>
+            <ComboBox fx:id="shapePicker" promptText="Select Shape"/>
+        </HBox>
+    </top>
+    <center>
+        <Canvas fx:id="drawingCanvas" width="800" height="600" styleClass="canvas-pane"/>
+    </center>
+</BorderPane>
+
