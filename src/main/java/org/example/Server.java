@@ -10,9 +10,9 @@ public class Server {
     private static final int PORT = 12345;
     private static final String DB_URL = "jdbc:sqlite:userdb.sqlite";
 
-    // Shared data model for canvas
-    private final List<String> canvasData = Collections.synchronizedList(new ArrayList<>());
-    private final List<PrintWriter> clientWriters = Collections.synchronizedList(new ArrayList<>());
+    private final List<String> sharedCanvasData = Collections.synchronizedList(new ArrayList<>());
+    private final Map<String, List<String>> individualCanvasData = Collections.synchronizedMap(new HashMap<>());
+    private final Map<String, PrintWriter> clients = Collections.synchronizedMap(new HashMap<>());
 
     public static void main(String[] args) {
         new Server().start();
@@ -32,29 +32,24 @@ public class Server {
     }
 
     private void handleClient(Socket clientSocket) {
+        String clientName = null;
+
         try (BufferedReader in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
              PrintWriter out = new PrintWriter(clientSocket.getOutputStream(), true)) {
-            // Add client writer to broadcast list
-            synchronized (clientWriters) {
-                clientWriters.add(out);
-            }
 
-            // Send current canvas data to the new client
-            synchronized (canvasData) {
-                for (String action : canvasData) {
-                    out.println(action);
-                }
-            }
-
-            // Handle incoming commands from the client
             String command;
             while ((command = in.readLine()) != null) {
-                if (command.startsWith("draw")) {
-                    handleDrawCommand(command);
-                } else if (command.startsWith("login")) {
+                if (command.startsWith("login")) {
                     handleLoginCommand(command, out);
                 } else if (command.startsWith("register")) {
                     handleRegisterCommand(command, out);
+                } else if (command.startsWith("draw")) {
+                    handleDrawCommand(clientName, command);
+                } else if (command.startsWith("requestClientCanvas")) {
+                    handleClientCanvasRequest(command, out);
+                } else if (command.startsWith("setName")) {
+                    clientName = command.split(" ", 2)[1];
+                    registerClient(clientName, out);
                 } else {
                     out.println("Unknown command");
                 }
@@ -62,22 +57,8 @@ public class Server {
         } catch (IOException e) {
             e.printStackTrace();
         } finally {
-            synchronized (clientWriters) {
-                clientWriters.removeIf(writer -> writer.checkError());
-            }
-        }
-    }
-
-    private void handleDrawCommand(String command) {
-        // Store the draw action in the canvas data
-        synchronized (canvasData) {
-            canvasData.add(command);
-        }
-
-        // Broadcast the draw action to all connected clients
-        synchronized (clientWriters) {
-            for (PrintWriter writer : clientWriters) {
-                writer.println(command);
+            if (clientName != null) {
+                unregisterClient(clientName);
             }
         }
     }
@@ -135,6 +116,72 @@ public class Server {
             } else {
                 e.printStackTrace();
                 out.println("Error during registration: " + e.getMessage());
+            }
+        }
+    }
+
+    private void handleDrawCommand(String clientName, String command) {
+        synchronized (sharedCanvasData) {
+            sharedCanvasData.add(command);
+        }
+
+        if (clientName != null) {
+            synchronized (individualCanvasData) {
+                individualCanvasData.computeIfAbsent(clientName, k -> new ArrayList<>()).add(command);
+            }
+        }
+
+        synchronized (clients) {
+            for (PrintWriter writer : clients.values()) {
+                writer.println(command);
+            }
+        }
+    }
+
+    private void handleClientCanvasRequest(String command, PrintWriter out) {
+        String[] parts = command.split(" ", 2);
+        if (parts.length < 2) {
+            out.println("Invalid request format");
+            return;
+        }
+
+        String targetClientName = parts[1];
+        if (!individualCanvasData.containsKey(targetClientName)) {
+            out.println("Invalid client name");
+            return;
+        }
+
+        List<String> clientCanvas = individualCanvasData.get(targetClientName);
+        for (String action : clientCanvas) {
+            out.println("canvasData " + action);
+        }
+    }
+
+    private void registerClient(String clientName, PrintWriter out) {
+        synchronized (clients) {
+            clients.put(clientName, out);
+        }
+        synchronized (individualCanvasData) {
+            individualCanvasData.putIfAbsent(clientName, new ArrayList<>());
+        }
+        broadcastClientList();
+    }
+
+    private void unregisterClient(String clientName) {
+        synchronized (clients) {
+            clients.remove(clientName);
+        }
+        synchronized (individualCanvasData) {
+            individualCanvasData.remove(clientName);
+        }
+        broadcastClientList();
+    }
+
+    private void broadcastClientList() {
+        String clientList = "clients " + String.join(",", clients.keySet());
+        synchronized (clients) {
+            for (PrintWriter writer : clients.values()) {
+                writer.println(clientList);
             }
         }
     }

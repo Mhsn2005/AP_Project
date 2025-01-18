@@ -5,17 +5,24 @@ import javafx.application.Platform;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Scene;
 import javafx.stage.Stage;
-import javafx.scene.canvas.GraphicsContext;
-import javafx.scene.paint.Color;
 
 import java.io.*;
 import java.net.Socket;
+import java.util.*;
 
 public class Client extends Application {
+
     private static final String HOST = "localhost";
     private static final int PORT = 12345;
-    private static GraphicsContext gc;
+
     private static Stage primaryStage;
+    private static PrintWriter out;
+    private static BufferedReader in;
+
+    private static String clientName;
+    private static final Map<String, String> clientCanvases = new HashMap<>();
+    private static List<String> connectedClients = new ArrayList<>();
+    private static String currentClient = "Shared";
 
     public static void main(String[] args) {
         launch(args);
@@ -34,39 +41,79 @@ public class Client extends Application {
             e.printStackTrace();
         }
     }
-    public static void initializeCanvas(GraphicsContext graphicsContext) {
-        gc = graphicsContext;
-        new Thread(Client::connectToServer).start();
+
+    public static void connectToServer(String name) {
+        clientName = name;
+        new Thread(() -> {
+            try (Socket socket = new Socket(HOST, PORT)) {
+                out = new PrintWriter(socket.getOutputStream(), true);
+                in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+
+                // ارسال نام کلاینت به سرور
+                out.println(clientName);
+
+                // پردازش دستورات از سرور
+                String command;
+                while ((command = in.readLine()) != null) {
+                    if (command.startsWith("clients")) {
+                        updateClientList(command);
+                    } else if (command.startsWith("draw")) {
+                        updateSharedCanvas(command);
+                    } else if (command.startsWith("canvasData")) {
+                        updateClientCanvas(command);
+                    }
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }).start();
     }
 
-    private static void connectToServer() {
-        try (Socket socket = new Socket(HOST, PORT);
-             BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-             PrintWriter out = new PrintWriter(socket.getOutputStream(), true)) {
+    private static void updateClientList(String command) {
+        String[] parts = command.split(" ", 2);
+        if (parts.length < 2) return;
 
-            // Listen for incoming draw commands
-            String command;
-            while ((command = in.readLine()) != null) {
-                if (command.startsWith("draw")) {
-                    applyDrawCommand(command);
-                }
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
+        Platform.runLater(() -> {
+            connectedClients = Arrays.asList(parts[1].split(","));
+            MainPageController.updateClientList(connectedClients);
+        });
+    }
+
+    private static void updateSharedCanvas(String command) {
+        Platform.runLater(() -> MainPageController.updateCanvas(command));
+    }
+
+    private static void updateClientCanvas(String command) {
+        String[] parts = command.split(" ", 2);
+        if (parts.length < 2) return;
+
+        String client = parts[0];
+        String canvasData = parts[1];
+
+        clientCanvases.put(client, canvasData);
+
+        if (MainPageController.getCurrentClient().equals(client)) {
+            Platform.runLater(() -> MainPageController.loadCanvasData(canvasData));
         }
     }
-
     public static String sendCommand(String command) {
         try (Socket socket = new Socket(HOST, PORT);
              PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
              BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()))) {
             out.println(command);
-            return in.readLine();
+
+            String temp = in.readLine();
+            System.out.println(temp);
+            return temp;
+
         } catch (IOException e) {
             e.printStackTrace();
             return "Error: Unable to connect to server.";
         }
     }
+
+
+
     public static void showMainPage() {
         Platform.runLater(() -> {
             try {
@@ -80,18 +127,11 @@ public class Client extends Application {
         });
     }
 
-    private static void applyDrawCommand(String command) {
-        String[] parts = command.split(" ");
-        if (parts.length < 5) return;
+    public static String getCurrentClient() {
+        return currentClient;
+    }
 
-        Platform.runLater(() -> {
-            gc.setStroke(Color.web(parts[1]));
-            gc.setLineWidth(Double.parseDouble(parts[2]));
-            double startX = Double.parseDouble(parts[3]);
-            double startY = Double.parseDouble(parts[4]);
-            double endX = Double.parseDouble(parts[5]);
-            double endY = Double.parseDouble(parts[6]);
-            gc.strokeLine(startX, startY, endX, endY);
-        });
+    public static void setCurrentClient(String client) {
+        currentClient = client;
     }
 }

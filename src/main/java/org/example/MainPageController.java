@@ -1,13 +1,21 @@
 package org.example;
 
+import javafx.application.Platform;
 import javafx.fxml.FXML;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
+import javafx.scene.control.ListView;
 import javafx.scene.control.Slider;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.paint.Color;
+
+import java.io.*;
+import java.net.Socket;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 public class MainPageController {
 
@@ -26,9 +34,15 @@ public class MainPageController {
     @FXML
     private ComboBox<String> shapePicker;
 
-    private GraphicsContext gc;
+    @FXML
+    private  ListView<String> clientList;
+
+    private static GraphicsContext gc;
     private double startX, startY;
     private boolean isEraser = false;
+
+    private Map<String, String> clientCanvases = new HashMap<>(); // نقشه‌ای برای ذخیره بوم کلاینت‌ها
+    private String currentClient = "Shared"; // بوم فعلی
 
     @FXML
     public void initialize() {
@@ -39,16 +53,17 @@ public class MainPageController {
         thicknessSlider.valueProperty().addListener((obs, oldVal, newVal) -> setThickness(newVal.doubleValue()));
 
         colorPicker.getItems().addAll("Black", "Red", "Blue", "Green", "Yellow", "White");
-        colorPicker.setValue("Black"); // مقدار پیش‌فرض
+        colorPicker.setValue("Black");
         colorPicker.setOnAction(e -> setColor());
 
         shapePicker.getItems().addAll("Free Draw", "Line", "Rectangle", "Circle", "Eraser");
-        shapePicker.setValue("Free Draw"); // مقدار پیش‌فرض
+        shapePicker.setValue("Free Draw");
         shapePicker.setOnAction(e -> toggleShapeMode());
+
+        clientList.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, newVal) -> switchToClientCanvas(newVal));
     }
 
     private void setupCanvas() {
-        // تنظیم رنگ پس‌زمینه بوم
         gc.setFill(Color.web("#ecf0f1"));
         gc.fillRect(0, 0, drawingCanvas.getWidth(), drawingCanvas.getHeight());
 
@@ -82,7 +97,7 @@ public class MainPageController {
         double endY = e.getY();
 
         String shape = shapePicker.getValue();
-        if (shape == null) return; // اگر مقدار انتخاب نشده باشد، کاری انجام نده
+        if (shape == null) return;
 
         switch (shape) {
             case "Line":
@@ -98,15 +113,21 @@ public class MainPageController {
                 gc.strokeOval(startX - radius, startY - radius, radius * 2, radius * 2);
                 break;
             case "Eraser":
-                // استفاده از رنگ پیش‌زمینه برای پاک کردن
                 gc.clearRect(endX - 10, endY - 10, 20, 20);
                 break;
         }
+
+        sendShapeToServer(shape, startX, startY, endX, endY, colorPicker.getValue());
+    }
+
+    private void sendShapeToServer(String shapeType, double startX, double startY, double endX, double endY, String color) {
+        String command = "draw " + shapeType + " " + startX + " " + startY + " " + endX + " " + endY + " " + color + " " + currentClient;
+        Client.sendCommand(command);
     }
 
     private void setColor() {
         String selectedColor = colorPicker.getValue();
-        if (selectedColor == null) return; // اگر مقداری انتخاب نشده باشد، خروج از متد
+        if (selectedColor == null) return;
 
         Color color;
         switch (selectedColor) {
@@ -130,20 +151,110 @@ public class MainPageController {
 
     private void toggleShapeMode() {
         String shape = shapePicker.getValue();
-        if (shape == null) return; // اگر مقدار انتخاب نشده باشد، خروج از متد
+        if (shape == null) return;
 
         isEraser = shape.equals("Eraser");
-        if (isEraser) {
-            // تنظیم رنگ پاک‌کن به رنگ پس‌زمینه
-            gc.setStroke(Color.web("#ecf0f1"));
-        } else {
-            setColor();
-        }
+        gc.setStroke(isEraser ? Color.web("#ecf0f1") : Color.web(colorPicker.getValue()));
     }
 
     private void clearCanvas() {
-        // پاک کردن کل بوم با رنگ پیش‌زمینه
         gc.setFill(Color.web("#ecf0f1"));
         gc.fillRect(0, 0, drawingCanvas.getWidth(), drawingCanvas.getHeight());
+    }
+
+    private void switchToClientCanvas(String clientName) {
+        if (clientName == null || clientName.equals(currentClient)) return;
+
+        currentClient = clientName;
+        gc.setFill(Color.web("#ecf0f1"));
+        gc.fillRect(0, 0, drawingCanvas.getWidth(), drawingCanvas.getHeight());
+
+        String clientCanvasData = clientCanvases.getOrDefault(clientName, "");
+        loadCanvasData(clientCanvasData);
+    }
+
+    static void loadCanvasData(String canvasData) {
+        // اینجا باید داده‌های بوم را از سرور دریافت کنید و در بوم بارگذاری کنید
+        // فرض کنید canvasData به صورت یک رشته از دستورات رسم ارسال می‌شود.
+        if (canvasData != null && !canvasData.isEmpty()) {
+            String[] actions = canvasData.split(";");
+            for (String action : actions) {
+                String[] parts = action.split(" ");
+                String shape = parts[0];
+                double startX = Double.parseDouble(parts[1]);
+                double startY = Double.parseDouble(parts[2]);
+                double endX = Double.parseDouble(parts[3]);
+                double endY = Double.parseDouble(parts[4]);
+                String color = parts[5];
+
+                // اینجا باید اشکال را به درستی رسم کنید
+                // این فقط برای نمایش دادن نمونه است
+                gc.setStroke(Color.web(color));
+                switch (shape) {
+                    case "Line":
+                        gc.strokeLine(startX, startY, endX, endY);
+                        break;
+                    case "Rectangle":
+                        gc.strokeRect(startX, startY, endX - startX, endY - startY);
+                        break;
+                    case "Circle":
+                        double radius = Math.sqrt(Math.pow(endX - startX, 2) + Math.pow(endY - startY, 2));
+                        gc.strokeOval(startX - radius, startY - radius, radius * 2, radius * 2);
+                        break;
+                }
+            }
+        }
+    }
+
+    public static void updateCanvas(String action) {
+        // دریافت دستور رسم از سرور و اعمال آن روی بوم مشترک
+        Platform.runLater(() -> {
+            String[] parts = action.split(" ");
+            if (parts.length < 7) return; // مطمئن شوید که دستور معتبر است
+
+            String shape = parts[1];
+            double startX = Double.parseDouble(parts[2]);
+            double startY = Double.parseDouble(parts[3]);
+            double endX = Double.parseDouble(parts[4]);
+            double endY = Double.parseDouble(parts[5]);
+            String color = parts[6];
+
+            gc.setStroke(Color.web(color));
+            switch (shape) {
+                case "Line":
+                    gc.strokeLine(startX, startY, endX, endY);
+                    break;
+                case "Rectangle":
+                    gc.strokeRect(startX, startY, endX - startX, endY - startY);
+                    break;
+                case "Circle":
+                    double radius = Math.sqrt(Math.pow(endX - startX, 2) + Math.pow(endY - startY, 2));
+                    gc.strokeOval(startX - radius, startY - radius, radius * 2, radius * 2);
+                    break;
+            }
+        });
+    }
+    private static MainPageController instance;
+
+    public MainPageController() {
+        instance = this;
+    }
+
+    public static MainPageController getInstance() {
+        return instance;
+    }
+
+    public static void updateClientList(List<String> clients) {
+        if (getInstance() != null) {
+            Platform.runLater(() -> {
+                getInstance().clientList.getItems().clear();
+                getInstance().clientList.getItems().addAll(clients);
+            });
+        }
+    }
+
+
+    public static String getCurrentClient() {
+        return Client.getCurrentClient();
     }
 }
