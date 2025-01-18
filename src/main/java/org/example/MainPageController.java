@@ -11,8 +11,6 @@ import javafx.scene.control.Slider;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.paint.Color;
 
-import java.io.*;
-import java.net.Socket;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -35,13 +33,13 @@ public class MainPageController {
     private ComboBox<String> shapePicker;
 
     @FXML
-    private  ListView<String> clientList;
+    private ListView<String> clientList;
 
     private static GraphicsContext gc;
     private double startX, startY;
     private boolean isEraser = false;
 
-    private Map<String, String> clientCanvases = new HashMap<>(); // نقشه‌ای برای ذخیره بوم کلاینت‌ها
+    private final Map<String, String> clientCanvases = new HashMap<>(); // نقشه‌ای برای ذخیره بوم کلاینت‌ها
     private String currentClient = "Shared"; // بوم فعلی
 
     @FXML
@@ -131,12 +129,24 @@ public class MainPageController {
 
         Color color;
         switch (selectedColor) {
-            case "Red": color = Color.RED; break;
-            case "Blue": color = Color.BLUE; break;
-            case "Green": color = Color.GREEN; break;
-            case "Yellow": color = Color.YELLOW; break;
-            case "White": color = Color.WHITE; break;
-            default: color = Color.BLACK; break;
+            case "Red":
+                color = Color.RED;
+                break;
+            case "Blue":
+                color = Color.BLUE;
+                break;
+            case "Green":
+                color = Color.GREEN;
+                break;
+            case "Yellow":
+                color = Color.YELLOW;
+                break;
+            case "White":
+                color = Color.WHITE;
+                break;
+            default:
+                color = Color.BLACK;
+                break;
         }
 
         if (!isEraser) {
@@ -166,6 +176,10 @@ public class MainPageController {
         if (clientName == null || clientName.equals(currentClient)) return;
 
         currentClient = clientName;
+        Client.setCurrentClient(clientName);
+
+        System.out.println("Switching to client canvas: " + clientName); // لاگ برای بررسی
+
         gc.setFill(Color.web("#ecf0f1"));
         gc.fillRect(0, 0, drawingCanvas.getWidth(), drawingCanvas.getHeight());
 
@@ -174,8 +188,6 @@ public class MainPageController {
     }
 
     static void loadCanvasData(String canvasData) {
-        // اینجا باید داده‌های بوم را از سرور دریافت کنید و در بوم بارگذاری کنید
-        // فرض کنید canvasData به صورت یک رشته از دستورات رسم ارسال می‌شود.
         if (canvasData != null && !canvasData.isEmpty()) {
             String[] actions = canvasData.split(";");
             for (String action : actions) {
@@ -187,8 +199,6 @@ public class MainPageController {
                 double endY = Double.parseDouble(parts[4]);
                 String color = parts[5];
 
-                // اینجا باید اشکال را به درستی رسم کنید
-                // این فقط برای نمایش دادن نمونه است
                 gc.setStroke(Color.web(color));
                 switch (shape) {
                     case "Line":
@@ -207,10 +217,9 @@ public class MainPageController {
     }
 
     public static void updateCanvas(String action) {
-        // دریافت دستور رسم از سرور و اعمال آن روی بوم مشترک
         Platform.runLater(() -> {
             String[] parts = action.split(" ");
-            if (parts.length < 7) return; // مطمئن شوید که دستور معتبر است
+            if (parts.length < 7) return;
 
             String shape = parts[1];
             double startX = Double.parseDouble(parts[2]);
@@ -234,6 +243,7 @@ public class MainPageController {
             }
         });
     }
+
     private static MainPageController instance;
 
     public MainPageController() {
@@ -244,6 +254,7 @@ public class MainPageController {
         return instance;
     }
 
+
     public static void updateClientList(List<String> clients) {
         if (getInstance() != null) {
             Platform.runLater(() -> {
@@ -253,8 +264,8 @@ public class MainPageController {
         }
     }
 
-
     public static String getCurrentClient() {
         return Client.getCurrentClient();
     }
-}
+
+    }

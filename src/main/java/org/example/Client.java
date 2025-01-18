@@ -49,19 +49,13 @@ public class Client extends Application {
                 out = new PrintWriter(socket.getOutputStream(), true);
                 in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
 
-                // ارسال نام کلاینت به سرور
-                out.println(clientName);
+                // Send client name to the server
+                out.println("setName " + clientName);
 
-                // پردازش دستورات از سرور
-                String command;
-                while ((command = in.readLine()) != null) {
-                    if (command.startsWith("clients")) {
-                        updateClientList(command);
-                    } else if (command.startsWith("draw")) {
-                        updateSharedCanvas(command);
-                    } else if (command.startsWith("canvasData")) {
-                        updateClientCanvas(command);
-                    }
+                // Listen for server messages
+                String message;
+                while ((message = in.readLine()) != null) {
+                    processServerMessage(message);
                 }
             } catch (IOException e) {
                 e.printStackTrace();
@@ -69,7 +63,18 @@ public class Client extends Application {
         }).start();
     }
 
+    private static void processServerMessage(String message) {
+        if (message.startsWith("clients")) {
+            updateClientList(message);
+        } else if (message.startsWith("draw")) {
+            updateSharedCanvas(message);
+        } else if (message.startsWith("canvasData")) {
+            updateClientCanvas(message);
+        }
+    }
+
     private static void updateClientList(String command) {
+        System.out.println("Received client list update: " + command);
         String[] parts = command.split(" ", 2);
         if (parts.length < 2) return;
 
@@ -80,6 +85,7 @@ public class Client extends Application {
     }
 
     private static void updateSharedCanvas(String command) {
+        System.out.println("Received draw command: " + command);
         Platform.runLater(() -> MainPageController.updateCanvas(command));
     }
 
@@ -96,23 +102,34 @@ public class Client extends Application {
             Platform.runLater(() -> MainPageController.loadCanvasData(canvasData));
         }
     }
+
+    public static void sendDrawCommand(String command) {
+        if (out != null) {
+            out.println(command);
+        }
+    }
+
+    public static void requestClientCanvas(String clientName) {
+        if (out != null) {
+            out.println("requestClientCanvas " + clientName);
+        }
+    }
+
     public static String sendCommand(String command) {
         try (Socket socket = new Socket(HOST, PORT);
-             PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
-             BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()))) {
-            out.println(command);
+             PrintWriter tempOut = new PrintWriter(socket.getOutputStream(), true);
+             BufferedReader tempIn = new BufferedReader(new InputStreamReader(socket.getInputStream()))) {
 
-            String temp = in.readLine();
-            System.out.println(temp);
-            return temp;
+            tempOut.println(command);
+            String response = tempIn.readLine();
+            System.out.println(response);
+            return response;
 
         } catch (IOException e) {
             e.printStackTrace();
             return "Error: Unable to connect to server.";
         }
     }
-
-
 
     public static void showMainPage() {
         Platform.runLater(() -> {

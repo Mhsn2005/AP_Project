@@ -10,8 +10,13 @@ public class Server {
     private static final int PORT = 12345;
     private static final String DB_URL = "jdbc:sqlite:userdb.sqlite";
 
+    // داده‌های بوم مشترک
     private final List<String> sharedCanvasData = Collections.synchronizedList(new ArrayList<>());
+
+    // داده‌های بوم کاربران به صورت جداگانه
     private final Map<String, List<String>> individualCanvasData = Collections.synchronizedMap(new HashMap<>());
+
+    // لیست کلاینت‌های متصل و ارتباط آن‌ها
     private final Map<String, PrintWriter> clients = Collections.synchronizedMap(new HashMap<>());
 
     public static void main(String[] args) {
@@ -21,6 +26,7 @@ public class Server {
     public void start() {
         try (ServerSocket serverSocket = new ServerSocket(PORT)) {
             System.out.println("Server is running on port " + PORT);
+
             while (true) {
                 Socket clientSocket = serverSocket.accept();
                 System.out.println("Client connected: " + clientSocket.getInetAddress());
@@ -130,6 +136,7 @@ public class Server {
                 individualCanvasData.computeIfAbsent(clientName, k -> new ArrayList<>()).add(command);
             }
         }
+        System.out.println("Broadcasting draw command: " + command);
 
         synchronized (clients) {
             for (PrintWriter writer : clients.values()) {
@@ -179,6 +186,7 @@ public class Server {
 
     private void broadcastClientList() {
         String clientList = "clients " + String.join(",", clients.keySet());
+        System.out.println("Broadcasting client list: " + clientList);
         synchronized (clients) {
             for (PrintWriter writer : clients.values()) {
                 writer.println(clientList);
